@@ -1,33 +1,55 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── DATA ───────────────────────────────────────────────
-const NEWS = [
-  { id: 1, category: "決算", impact: "high", time: "10:15", ticker: "TSE:7203",
-    title: "トヨタ自動車、通期営業利益を上方修正——円安効果と北米販売好調",
-    summary: "トヨタ自動車（7203）は2025年3月期の通期営業利益予想を4.5兆円から5.0兆円へ上方修正した。円安効果に加え、北米でのHV販売が想定を上回る伸びを示した。アドバイザーとして顧客への影響を確認しておきたい。",
-    tags: ["トヨタ", "自動車", "決算"] },
-  { id: 2, category: "金融政策", impact: "high", time: "09:00", ticker: "TVC:JGB10Y",
-    title: "日銀、追加利上げ見送り——植田総裁「物価目標の持続性を見極める」",
-    summary: "日本銀行は本日の金融政策決定会合で政策金利を0.5%に据え置いた。植田総裁は会見で、物価目標2%の持続的達成に向けて慎重に判断する姿勢を改めて示した。",
-    tags: ["日銀", "金利", "金融政策"] },
-  { id: 3, category: "マーケット", impact: "medium", time: "08:45", ticker: "SPREADEX:JPN225",
-    title: "日経平均、3日続伸——半導体関連に買い、38,500円台回復",
-    summary: "東京株式市場で日経平均株価は3日続伸。米フィラデルフィア半導体指数の上昇を好感し、東京エレクトロンやアドバンテストなど半導体関連株に買いが集まった。",
-    tags: ["日経平均", "半導体", "株式"] },
-  { id: 4, category: "新NISA", impact: "medium", time: "08:00", ticker: "TSE:1306",
-    title: "新NISA口座数、2,500万口座を突破——3月末時点・金融庁集計",
-    summary: "金融庁の集計によると、新NISAの口座数が3月末時点で2,500万口座を超えた。特に30〜40代の積立投資需要が旺盛で、インデックスファンドへの流入が続いている。",
-    tags: ["NISA", "投資信託", "個人投資家"] },
-  { id: 5, category: "為替", impact: "medium", time: "07:30", ticker: "FX:USDJPY",
-    title: "ドル円、148円台前半——FRB議事録でタカ派発言を確認",
-    summary: "外国為替市場でドル円は148円台前半で推移。FOMCの議事録で複数の委員が利下げに慎重な姿勢を示したことが確認され、ドルが底堅く推移している。",
-    tags: ["為替", "ドル円", "FRB"] },
-  { id: 6, category: "不動産", impact: "low", time: "昨日", ticker: "TSE:8952",
-    title: "J-REIT指数、小幅上昇——金利据え置きを好感",
-    summary: "東証REIT指数は小幅上昇。日銀の利上げ見送りを受け、金利上昇懸念が後退した。物流・住居系REITに買いが入った。",
-    tags: ["REIT", "不動産", "金利"] },
+// ─── RSS FEEDS ───────────────────────────────────────────
+const RSS_FEEDS = [
+  { id: "st", label: "株式" },
+  { id: "fx", label: "為替" },
+  { id: "mk", label: "マーケット" },
 ];
 
+const IMPACT_KEYWORDS = {
+  high: ["日銀", "利上げ", "利下げ", "決算", "上方修正", "下方修正", "破綻", "倒産", "速報", "緊急"],
+  medium: ["日経平均", "株価", "為替", "円安", "円高", "NISA", "金利", "物価"],
+};
+
+function detectImpact(title) {
+  if (IMPACT_KEYWORDS.high.some(k => title.includes(k))) return "high";
+  if (IMPACT_KEYWORDS.medium.some(k => title.includes(k))) return "medium";
+  return "low";
+}
+
+function detectCategory(title) {
+  if (["決算", "上方修正", "下方修正", "業績"].some(k => title.includes(k))) return "決算";
+  if (["日銀", "金利", "政策", "利上げ", "利下げ"].some(k => title.includes(k))) return "金融政策";
+  if (["NISA", "投資信託", "ファンド"].some(k => title.includes(k))) return "新NISA";
+  if (["ドル", "円安", "円高", "為替"].some(k => title.includes(k))) return "為替";
+  if (["REIT", "不動産"].some(k => title.includes(k))) return "不動産";
+  return "マーケット";
+}
+
+function parseRSS(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "text/xml");
+  const items = Array.from(doc.querySelectorAll("item"));
+  return items.slice(0, 10).map((item, i) => {
+    const title = item.querySelector("title")?.textContent?.trim() || "";
+    const desc = item.querySelector("description")?.textContent?.replace(/<[^>]*>/g, "").trim() || "";
+    const link = item.querySelector("link")?.textContent?.trim() || "";
+    const pubDate = item.querySelector("pubDate")?.textContent?.trim() || "";
+    const date = pubDate ? new Date(pubDate) : new Date();
+    const timeStr = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+    return {
+      id: `rss-${i}-${Date.now()}`,
+      title, summary: desc || title, link,
+      time: timeStr,
+      impact: detectImpact(title),
+      category: detectCategory(title),
+      tags: [],
+    };
+  });
+}
+
+// ─── WATCHLIST ───────────────────────────────────────────
 const WATCHLIST = [
   { symbol: "7203", name: "トヨタ自動車", price: "3,842", change: "+1.8%", up: true },
   { symbol: "6762", name: "TDK", price: "1,923", change: "+2.4%", up: true },
@@ -46,7 +68,7 @@ const CHART_SYMBOLS = [
   { label: "10年債", symbol: "TVC:JGB10Y" },
 ];
 
-const CATEGORIES = ["すべて", "決算", "金融政策", "マーケット", "新NISA", "為替", "不動産"];
+const CATEGORIES = ["すべて", "マーケット", "決算", "金融政策", "為替", "新NISA", "不動産"];
 
 const PUSH_NOTIFICATIONS = [
   { id: "p1", title: "🔴 重要：日銀政策金利 据え置き決定", time: "09:02", read: false },
@@ -56,8 +78,6 @@ const PUSH_NOTIFICATIONS = [
 
 const IMPACT = { high: "#C9A84C", medium: "#6B9FD4", low: "#7A8A9A" };
 const IMPACT_LABEL = { high: "重要", medium: "注目", low: "参考" };
-
-const SAVED_MEMO_INIT = [];
 
 // ─── TRADINGVIEW WIDGET ──────────────────────────────────
 function TVChart({ symbol, height = 260 }) {
@@ -84,21 +104,52 @@ function TVChart({ symbol, height = 260 }) {
 export default function App() {
   const [tab, setTab] = useState("news");
   const [category, setCategory] = useState("すべて");
+  const [activeFeed, setActiveFeed] = useState("st");
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [selected, setSelected] = useState(null);
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [chartSym, setChartSym] = useState("SPREADEX:JPN225");
   const [toast, setToast] = useState(null);
-  const [memos, setMemos] = useState(SAVED_MEMO_INIT);
+  const [memos, setMemos] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(PUSH_NOTIFICATIONS);
   const [showIncoming, setShowIncoming] = useState(false);
   const incomingShown = useRef(false);
 
   const unread = notifications.filter(n => !n.read).length;
-  const filtered = category === "すべて" ? NEWS : NEWS.filter(n => n.category === category);
+  const filtered = category === "すべて" ? news : news.filter(n => n.category === category);
 
-  // Simulate push notification after 4s
+  // RSS取得
+  const fetchNews = async (feedId = activeFeed) => {
+    setNewsLoading(true);
+    setNewsError(null);
+    try {
+      const res = await fetch(`/api/news?feed=${feedId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const items = parseRSS(text);
+      if (items.length === 0) throw new Error("記事が取得できませんでした");
+      setNews(items);
+      setLastUpdated(new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      setNewsError("ニュースの取得に失敗しました。再試行してください。");
+    }
+    setNewsLoading(false);
+  };
+
+  useEffect(() => { fetchNews(activeFeed); }, [activeFeed]);
+
+  // 5分ごと自動更新
+  useEffect(() => {
+    const interval = setInterval(() => fetchNews(activeFeed), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [activeFeed]);
+
+  // プッシュ通知シミュレーション
   useEffect(() => {
     if (incomingShown.current) return;
     const t = setTimeout(() => {
@@ -176,7 +227,7 @@ export default function App() {
   return (
     <div style={S.root}>
 
-      {/* ── Incoming Push Notification ── */}
+      {/* プッシュ通知シミュレーション */}
       {showIncoming && (
         <div onClick={() => setShowIncoming(false)} style={{
           position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
@@ -190,29 +241,30 @@ export default function App() {
             <div style={{ fontSize: 22 }}>🔔</div>
             <div>
               <div style={{ fontSize: 10, color: "#C9A84C", letterSpacing: 2, marginBottom: 3 }}>LG ASSET · Advisor Intelligence</div>
-              <div style={{ fontSize: 13, fontWeight: "bold", color: "#EEE8DC" }}>🔴 速報：日銀 金利据え置き決定</div>
-              <div style={{ fontSize: 11, color: "#8A9BAC", marginTop: 3 }}>アドバイザー向け分析を確認してください</div>
+              <div style={{ fontSize: 13, fontWeight: "bold", color: "#EEE8DC" }}>🔴 速報：最新ニュースを取得しました</div>
+              <div style={{ fontSize: 11, color: "#8A9BAC", marginTop: 3 }}>タップして確認してください</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Toast ── */}
+      {/* Toast */}
       {toast && (
         <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#C9A84C", color: "#080F1C", padding: "10px 22px", borderRadius: 40, fontSize: 13, fontWeight: "bold", zIndex: 9998, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
           {toast}
         </div>
       )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={S.header}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div>
             <div style={{ fontSize: 9, color: "#C9A84C", letterSpacing: 4 }}>LG ASSET</div>
             <div style={{ fontSize: 17, fontWeight: "bold", letterSpacing: 2 }}>Advisor Intelligence</div>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div onClick={() => setNotifOpen(true)} style={{ position: "relative", cursor: "pointer" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {lastUpdated && <div style={{ fontSize: 9, color: "#4A5A6A" }}>更新 {lastUpdated}</div>}
+            <div onClick={() => setNotifOpen(true)} style={{ cursor: "pointer" }}>
               <div style={{ border: "1px solid rgba(201,168,76,0.5)", borderRadius: 20, padding: "4px 12px", fontSize: 11, color: "#C9A84C" }}>🔔 {unread}</div>
             </div>
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#C9A84C,#7A5200)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: "bold", color: "#080F1C" }}>H</div>
@@ -225,15 +277,43 @@ export default function App() {
         </div>
       </div>
 
-      {/* ══════════ NEWS ══════════ */}
+      {/* ══ NEWS ══ */}
       {tab === "news" && (
         <div style={{ padding: "0 14px 100px" }}>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "12px 0", scrollbarWidth: "none" }}>
+          {/* フィード選択 */}
+          <div style={{ display: "flex", gap: 6, padding: "12px 0 6px", overflowX: "auto", scrollbarWidth: "none" }}>
+            {RSS_FEEDS.map(f => (
+              <button key={f.id} onClick={() => { setActiveFeed(f.id); setCategory("すべて"); }} style={S.pill(activeFeed===f.id)}>{f.label}</button>
+            ))}
+            <button onClick={() => fetchNews(activeFeed)} style={S.pill(false)}>↻ 更新</button>
+          </div>
+
+          {/* カテゴリフィルター */}
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "6px 0 12px", scrollbarWidth: "none" }}>
             {CATEGORIES.map(c => <button key={c} onClick={() => setCategory(c)} style={S.pill(category===c)}>{c}</button>)}
           </div>
-          {filtered.map(a => (
-            <div key={a.id} onClick={() => openArticle(a)} style={S.card([1,2].includes(a.id))}>
-              {[1,2].includes(a.id) && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#C9A84C", borderRadius: "3px 0 0 3px" }} />}
+
+          {/* ローディング */}
+          {newsLoading && (
+            <div style={{ textAlign: "center", padding: "60px 20px" }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>📡</div>
+              <div style={{ fontSize: 13, color: "#4A5A6A" }}>Yahoo!ファイナンスから取得中...</div>
+            </div>
+          )}
+
+          {/* エラー */}
+          {!newsLoading && newsError && (
+            <div style={{ background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.2)", borderRadius: 12, padding: 16, textAlign: "center" }}>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>⚠️</div>
+              <div style={{ fontSize: 13, color: "#E05C5C", marginBottom: 12 }}>{newsError}</div>
+              <button onClick={() => fetchNews(activeFeed)} style={{ background: "#C9A84C", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 12, color: "#080F1C", fontWeight: "bold", cursor: "pointer", fontFamily: "inherit" }}>再試行</button>
+            </div>
+          )}
+
+          {/* ニュース一覧 */}
+          {!newsLoading && !newsError && filtered.map((a, i) => (
+            <div key={a.id} onClick={() => openArticle(a)} style={S.card(a.impact === "high")}>
+              {a.impact === "high" && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#C9A84C", borderRadius: "3px 0 0 3px" }} />}
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <span style={S.badge(IMPACT[a.impact])}>{IMPACT_LABEL[a.impact]}</span>
@@ -242,16 +322,24 @@ export default function App() {
                 <span style={{ fontSize: 10, color: "#4A5A6A" }}>{a.time}</span>
               </div>
               <div style={{ fontSize: 14, fontWeight: "bold", lineHeight: 1.5, color: "#EEE8DC", marginBottom: 6 }}>{a.title}</div>
-              <div style={{ fontSize: 11, color: "#7A8A9A", lineHeight: 1.6 }}>{a.summary.slice(0, 58)}...</div>
-              <div style={{ display: "flex", gap: 5, marginTop: 10, flexWrap: "wrap" }}>
-                {a.tags.map(t => <span key={t} style={{ fontSize: 9, color: "#5A7A9A", background: "rgba(90,122,154,0.12)", padding: "2px 8px", borderRadius: 10 }}>#{t}</span>)}
+              <div style={{ fontSize: 11, color: "#7A8A9A", lineHeight: 1.6 }}>{a.summary.slice(0, 60)}...</div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <span style={{ fontSize: 10, color: "#C9A84C" }}>AI分析を見る →</span>
               </div>
             </div>
           ))}
+
+          {!newsLoading && !newsError && filtered.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "#3A4A5A", fontSize: 13 }}>このカテゴリの記事はありません</div>
+          )}
+
+          <div style={{ textAlign: "center", padding: "16px 0", fontSize: 10, color: "#2A3A4A" }}>
+            データソース：Yahoo!ファイナンス RSS · 5分ごと自動更新
+          </div>
         </div>
       )}
 
-      {/* ══════════ CHART ══════════ */}
+      {/* ══ CHART ══ */}
       {tab === "chart" && (
         <div style={{ padding: "14px 14px 100px" }}>
           <div style={{ fontSize: 11, color: "#6A7A8A", marginBottom: 10 }}>銘柄・指数を選択</div>
@@ -262,17 +350,18 @@ export default function App() {
             <TVChart symbol={chartSym} />
           </div>
           <div style={{ marginTop: 12, background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 12, padding: 12, fontSize: 11, color: "#6A7A8A", lineHeight: 1.7 }}>
-            ※ TradingViewウィジェットを使用。チャートは現在の契約プランのデータを表示します。
+            ※ TradingViewウィジェットを使用。
           </div>
         </div>
       )}
 
-      {/* ══════════ WATCHLIST ══════════ */}
+      {/* ══ WATCHLIST ══ */}
       {tab === "watchlist" && (
         <div style={{ padding: "14px 14px 100px" }}>
           <div style={{ fontSize: 11, color: "#6A7A8A", marginBottom: 12 }}>ウォッチリスト — タップでチャート表示</div>
           {WATCHLIST.map(s => (
-            <div key={s.symbol} onClick={() => { setChartSym(`TSE:${s.symbol}`); setTab("chart"); }} style={{ ...S.card(false), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div key={s.symbol} onClick={() => { setChartSym(`TSE:${s.symbol}`); setTab("chart"); }}
+              style={{ ...S.card(false), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: "bold", color: "#EEE8DC" }}>{s.name}</div>
                 <div style={{ fontSize: 10, color: "#4A5A6A", marginTop: 2 }}>{s.symbol} · 東証プライム</div>
@@ -283,13 +372,10 @@ export default function App() {
               </div>
             </div>
           ))}
-          <div style={{ marginTop: 8, background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 12, padding: 12, fontSize: 11, color: "#6A7A8A", lineHeight: 1.7 }}>
-            ※ 価格はデモデータ。本番時はJ-Quants API（東証）またはTradingView Data APIと連携します。
-          </div>
         </div>
       )}
 
-      {/* ══════════ MEMO ══════════ */}
+      {/* ══ MEMO ══ */}
       {tab === "memo" && (
         <div style={{ padding: "14px 14px 100px" }}>
           <div style={{ fontSize: 11, color: "#6A7A8A", marginBottom: 12 }}>保存した提案メモ</div>
@@ -309,13 +395,14 @@ export default function App() {
                 <div style={{ fontSize: 11, color: "#9AAABB", lineHeight: 1.8, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}
                   dangerouslySetInnerHTML={{ __html: md(m.aiText.slice(0, 200) + "...") }} />
               )}
-              <button onClick={() => { setMemos(prev => prev.filter((_, j) => j !== i)); showToast("削除しました"); }} style={{ marginTop: 12, background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: 8, padding: "6px 14px", fontSize: 11, color: "#E05C5C", cursor: "pointer", fontFamily: "inherit" }}>削除</button>
+              <button onClick={() => { setMemos(prev => prev.filter((_, j) => j !== i)); showToast("削除しました"); }}
+                style={{ marginTop: 12, background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: 8, padding: "6px 14px", fontSize: 11, color: "#E05C5C", cursor: "pointer", fontFamily: "inherit" }}>削除</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Bottom Nav ── */}
+      {/* Bottom Nav */}
       <div style={S.bottomNav}>
         {[["news","📰","ニュース"],["chart","📈","チャート"],["watchlist","⭐","銘柄"],["memo","📋","メモ"]].map(([k,ic,l]) => (
           <div key={k} onClick={() => setTab(k)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: tab===k ? "#C9A84C" : "#3A4A5A", fontSize: 9, cursor: "pointer", letterSpacing: 0.5 }}>
@@ -324,7 +411,7 @@ export default function App() {
         ))}
       </div>
 
-      {/* ── Notification Drawer ── */}
+      {/* 通知ドロワー */}
       {notifOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,8,16,0.88)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end" }} onClick={() => setNotifOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={S.drawer}>
@@ -344,7 +431,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Article Drawer ── */}
+      {/* 記事ドロワー */}
       {selected && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,8,16,0.88)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end" }} onClick={() => setSelected(null)}>
           <div onClick={e => e.stopPropagation()} style={S.drawer}>
@@ -352,20 +439,22 @@ export default function App() {
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
               <span style={S.badge(IMPACT[selected.impact])}>{IMPACT_LABEL[selected.impact]}</span>
               <span style={{ fontSize: 10, color: "#6A7A8A" }}>{selected.category} · {selected.time}</span>
+              <span style={{ fontSize: 9, color: "#3A4A5A", marginLeft: "auto" }}>Yahoo!ファイナンス</span>
             </div>
             <h2 style={{ fontSize: 16, fontWeight: "bold", lineHeight: 1.6, color: "#EEE8DC", marginBottom: 12 }}>{selected.title}</h2>
             <p style={{ fontSize: 13, color: "#9AAABB", lineHeight: 1.8, marginBottom: 16 }}>{selected.summary}</p>
 
-            {/* Chart */}
-            <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(201,168,76,0.15)", marginBottom: 16 }}>
-              <TVChart symbol={selected.ticker} height={220} />
-            </div>
+            {selected.link && (
+              <a href={selected.link} target="_blank" rel="noopener noreferrer"
+                style={{ display: "block", textAlign: "center", fontSize: 11, color: "#6B9FD4", marginBottom: 16, textDecoration: "none", border: "1px solid rgba(107,159,212,0.25)", borderRadius: 8, padding: 8 }}>
+                📎 Yahoo!ファイナンスで全文を読む
+              </a>
+            )}
 
-            {/* AI */}
             <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 12, padding: 14, marginBottom: 14 }}>
               <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: "bold", letterSpacing: 2, marginBottom: 10 }}>✦ AI アドバイザー分析</div>
               {aiLoading
-                ? <div style={{ color: "#6A7A8A", fontSize: 12 }}>分析中...</div>
+                ? <div style={{ color: "#6A7A8A", fontSize: 12 }}>Claude が分析中...</div>
                 : <div style={{ fontSize: 12, color: "#C8D4E0", lineHeight: 1.9 }} dangerouslySetInnerHTML={{ __html: md(aiText) }} />}
             </div>
 
