@@ -1,30 +1,18 @@
-export default async function handler(req, res) {
-  const { feed = "st" } = req.query;
+import { useState } from "react";
 
-  const urls = {
-    st: "https://news.google.com/rss/search?q=日本株+株価&hl=ja&gl=JP&ceid=JP:ja",
-    fx: "https://news.google.com/rss/search?q=ドル円+為替&hl=ja&gl=JP&ceid=JP:ja",
-    mk: "https://news.google.com/rss/search?q=日経平均+マーケット&hl=ja&gl=JP&ceid=JP:ja",
-  };
+export default function App() {
+  const [tab, setTab] = useState("news");
 
-  const url = urls[feed] || urls.st;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)",
-        "Accept": "application/rss+xml, application/xml, text/xml, */*",
-      },
-    });
-
-    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
-
-    const text = await response.text();
-
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.status(200).send(text);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  return (
+    <div style={{ background: "#080F1C", minHeight: "100vh", color: "#EEE8DC", maxWidth: 430, margin: "0 auto", fontFamily: "serif" }}>
+      <div style={{ background: "#0B1525", padding: "16px 18px", borderBottom: "1px solid rgba(201,168,76,0.2)" }}>
+        <div style={{ fontSize: 9, color: "#C9A84C", letterSpacing: 4 }}>LG ASSET</div>
+        <div style={{ fontSize: 17, fontWeight: "bold" }}>Advisor Intelligence</div>
+      </div>
+      <div style={{ padding: 16 }}>
+        <p style={{ color: "#C9A84C" }}>✅ アプリが正常に動作しています</p>
+        <p style={{ fontSize: 13, color: "#8A9BAC" }}>次のステップ：RSS連携を追加します</p>
+      </div>
+    </div>
+  );
 }
