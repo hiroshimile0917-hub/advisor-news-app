@@ -1,6 +1,9 @@
 export const config = { runtime: 'edge' };
 
-const JQUANTS_BASE = 'https://api.jpx-jquants.com/v1';
+// J-Quants V2 API — Free plan provides 12-week delayed data.
+// Intended for watchlist stock detail display, NOT real-time market ticker.
+
+const JQUANTS_BASE = 'https://api.jquants.com/v2';
 
 const TARGET_STOCKS = [
   { code: '7203', name: 'トヨタ自動車' },
@@ -8,69 +11,44 @@ const TARGET_STOCKS = [
   { code: '8306', name: '三菱UFJ' },
   { code: '9984', name: 'ソフトバンクG' },
   { code: '6861', name: 'キーエンス' },
-  { code: '8035', name: '東京エレクトロン' },
-  { code: '9432', name: 'NTT' },
-  { code: '6367', name: 'ダイキン工業' },
-  { code: '7974', name: '任天堂' },
-  { code: '4063', name: '信越化学工業' },
 ];
 
-async function getRefreshToken(email, password) {
-  const res = await fetch(`${JQUANTS_BASE}/token/auth_user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mailaddress: email, password }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`auth_user failed: ${res.status}`);
-  const data = await res.json();
-  return data.refreshToken;
-}
-
-async function getIdToken(refreshToken) {
-  const res = await fetch(`${JQUANTS_BASE}/token/auth_refresh?refreshtoken=${refreshToken}`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`auth_refresh failed: ${res.status}`);
-  const data = await res.json();
-  return data.idToken;
-}
-
-async function fetchDailyQuote(code, idToken) {
+async function fetchDailyQuote(code, apiKey) {
   const res = await fetch(`${JQUANTS_BASE}/prices/daily_quotes?code=${code}`, {
-    headers: { Authorization: `Bearer ${idToken}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return null;
   const data = await res.json();
-  // most recent trading day is first entry
   return data?.daily_quotes?.[0] ?? null;
 }
 
-export default async function handler() {
-  const email = process.env.JQUANTS_EMAIL;
-  const password = process.env.JQUANTS_PASSWORD;
+export default async function handler(req) {
+  const apiKey = process.env.JQUANTS_API_KEY;
 
-  if (!email || !password) {
+  if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: 'JQUANTS_EMAIL / JQUANTS_PASSWORD not configured' }),
+      JSON.stringify({ error: 'JQUANTS_API_KEY not configured' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
-  try {
-    const refreshToken = await getRefreshToken(email, password);
-    const idToken = await getIdToken(refreshToken);
+  // optional: filter by code query param (?code=7203)
+  const { searchParams } = new URL(req.url);
+  const codeFilter = searchParams.get('code');
+  const stocks = codeFilter
+    ? TARGET_STOCKS.filter((s) => s.code === codeFilter)
+    : TARGET_STOCKS;
 
+  try {
     const quotes = await Promise.all(
-      TARGET_STOCKS.map(async ({ code, name }) => {
+      stocks.map(async ({ code, name }) => {
         try {
-          const q = await fetchDailyQuote(code, idToken);
-          if (!q) return { code, name, price: '--', change: '--', changePercent: '--' };
+          const q = await fetchDailyQuote(code, apiKey);
+          if (!q) return { code, name, price: '--', change: '--', changePercent: '--', up: true, delayed: true };
 
           const price = q.Close ?? q.AdjustmentClose ?? null;
-          const prev  = q.PreviousClose ?? null;
+          const prev  = q.PreviousClose ?? q.AdjustmentPreviousClose ?? null;
           const change = price != null && prev != null ? price - prev : null;
           const changePct = change != null && prev ? (change / prev) * 100 : null;
           const up = change != null ? change >= 0 : true;
@@ -78,13 +56,17 @@ export default async function handler() {
           return {
             code,
             name,
-            price: price != null ? price.toLocaleString('ja-JP', { maximumFractionDigits: 1 }) : '--',
+            date: q.Date ?? '',
+            price: price != null
+              ? price.toLocaleString('ja-JP', { minimumFractionDigits: 0, maximumFractionDigits: 1 })
+              : '--',
             change: change != null ? `${up ? '+' : ''}${change.toFixed(1)}` : '--',
             changePercent: changePct != null ? `${up ? '+' : ''}${changePct.toFixed(2)}%` : '--',
             up,
+            delayed: true, // Free plan = 12-week delay
           };
         } catch {
-          return { code, name, price: '--', change: '--', changePercent: '--', up: true };
+          return { code, name, price: '--', change: '--', changePercent: '--', up: true, delayed: true };
         }
       })
     );
@@ -92,7 +74,7 @@ export default async function handler() {
     return new Response(JSON.stringify(quotes), {
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=300',  // 5分キャッシュ（株価は日次データ）
+        'Cache-Control': 'public, max-age=3600', // 1時間キャッシュ（遅延データのため長め）
         'Access-Control-Allow-Origin': '*',
       },
     });
