@@ -5,7 +5,9 @@ const FALLBACK = [
   { label: 'TOPIX',    value: '--', change: '--', up: true },
   { label: 'USD/JPY',  value: '--', change: '--', up: true },
   { label: 'S&P500',   value: '--', change: '--', up: true },
+  { label: 'NASDAQ',   value: '--', change: '--', up: true },
   { label: '米10年債', value: '--', change: '--', up: true },
+  { label: '日10年債', value: '--', change: '--', up: true },
 ];
 
 const REFRESH_MS = 60 * 1000;

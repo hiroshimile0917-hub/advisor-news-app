@@ -45,6 +45,15 @@ const SYMBOLS = [
     preferStooq: false,
   },
   {
+    label: 'NASDAQ',
+    stSymbol: '^ndq',
+    yhSymbol: '^IXIC',
+    tdSymbol: 'IXIC',
+    decimals: 0,
+    suffix: '',
+    preferStooq: false,
+  },
+  {
     label: '米10年債',
     stSymbol: '10usy.b',
     yhSymbol: '^TNX',
@@ -52,6 +61,15 @@ const SYMBOLS = [
     decimals: 3,
     suffix: '%',
     preferStooq: false,
+  },
+  {
+    label: '日10年債',
+    stSymbol: '10jpy.b',
+    yhSymbol: null,             // Yahoo doesn't have a stable JP10Y ticker
+    tdSymbol: null,
+    decimals: 3,
+    suffix: '%',
+    preferStooq: true,
   },
 ];
 
@@ -95,6 +113,7 @@ async function fetchStooq({ stSymbol, label, decimals, suffix }) {
 
 // ── Yahoo Finance ─────────────────────────────────────────────────────────────
 async function fetchYahoo({ yhSymbol, label, decimals, suffix }) {
+  if (!yhSymbol) throw new Error('no Yahoo symbol');
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSymbol)}` +
     `?interval=1d&range=1d`;

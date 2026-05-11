@@ -7,21 +7,9 @@ export const CATEGORIES = [
   },
   {
     id: 'us-equity',
-    label: '外国株式（米国）',
+    label: '米国株式',
     color: 'bg-blue-100 text-blue-800',
     keywords: ['NYSE', 'NASDAQ', 'S&P500', 'ダウ', '米国株'],
-  },
-  {
-    id: 'eu-equity',
-    label: '外国株式（欧州）',
-    color: 'bg-indigo-100 text-indigo-800',
-    keywords: ['DAX', 'FTSE', 'ユーロストックス', '欧州株'],
-  },
-  {
-    id: 'em-equity',
-    label: '外国株式（新興国）',
-    color: 'bg-green-100 text-green-800',
-    keywords: ['新興国', '中国株', 'インド株', 'MSCI EM'],
   },
   {
     id: 'bonds',
@@ -58,12 +46,6 @@ export const CATEGORIES = [
     label: '企業IR',
     color: 'bg-cyan-100 text-cyan-800',
     keywords: ['決算', '業績', '配当', 'IR', '株主'],
-  },
-  {
-    id: 'crypto',
-    label: '仮想通貨',
-    color: 'bg-gray-100 text-gray-800',
-    keywords: ['ビットコイン', '暗号資産', 'イーサリアム', 'crypto', 'BTC'],
   },
 ];
 
