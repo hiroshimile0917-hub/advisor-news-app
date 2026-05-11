@@ -7,7 +7,7 @@ export default function CategoryFilter({ selected, onChange }) {
   return (
     <div
       ref={scrollRef}
-      className="flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none"
+      className="flex flex-wrap gap-2 px-4 pb-1"
     >
       {[{ id: null, label: 'すべて' }, ...CATEGORIES].map((cat) => {
         const isActive = selected === cat.id;
