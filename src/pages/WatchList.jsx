@@ -19,7 +19,7 @@ function Toggle({ on, onToggle }) {
 
 export default function WatchList() {
   const {
-    keywords, watchedCategories,
+    keywords,
     addKeyword, removeKeyword,
     toggleCategory, isCategoryWatched,
     isFull, count,

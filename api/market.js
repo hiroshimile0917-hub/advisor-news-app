@@ -1,7 +1,8 @@
 export const config = { runtime: 'edge' };
 
 // Data sources priority varies per symbol:
-// - Japanese indices (^N225, ^TPX): Stooq primary — Yahoo serves stale data from non-JP IPs
+// - TOPIX: JPX official JSON. Stooq ^tpx returns HTTP 404.
+// - Nikkei (^N225): Stooq primary — Yahoo serves stale data from non-JP IPs
 //   (e.g. Vercel Edge gets yesterday's close as "current" price for ^N225;
 //    ^TPX returns a wrong defunct ticker on Yahoo)
 // - Others (USD/JPY, ^GSPC, ^TNX): Yahoo primary, Stooq fallback
@@ -19,8 +20,9 @@ const SYMBOLS = [
   },
   {
     label: 'TOPIX',
-    stSymbol: '^tpx',           // Stooq TOPIX (correct one — Yahoo's ^TPX is broken)
-    yhSymbol: '^TPX',
+    jpx: true,
+    stSymbol: null,           // JPX is used for TOPIX; no invalid Stooq mapping
+    yhSymbol: null,
     tdSymbol: null,             // TPX on Twelve Data is a US stock (Tempur Sealy)
     decimals: 2,
     suffix: '',
@@ -160,31 +162,50 @@ async function fetchTwelveData(tdSymbol, { label, decimals, suffix }, apiKey) {
   };
 }
 
-// ── Per-symbol fetch with fallback chain ──────────────────────────────────────
-async function fetchSymbol(sym, apiKey) {
-  // Build the priority chain based on preferStooq.
-  const chain = sym.preferStooq
-    ? [() => fetchStooq(sym), () => fetchYahoo(sym)]
-    : [() => fetchYahoo(sym), () => fetchStooq(sym)];
+// JPX公式ページ https://www.jpx.co.jp/markets/indices/realvalues/ のJSON。
+// previousDayRatioは前日終値比。配当込み指数やETFではなくTopix.Topixを選ぶ。
+export function parseJpxTopix(json, sym) {
+  const row = json?.Topix?.Topix;
+  const number = value => {
+    if (value == null || String(value).trim() === '') return null;
+    const parsed = Number(String(value).replaceAll(',', ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const price = number(row?.currentPrice);
+  const pct = number(row?.previousDayRatio);
+  if (price == null || price <= 0) throw new Error('JPX TOPIX missing/invalid currentPrice');
+  return { label: sym.label, value: fmt(price, sym.decimals, sym.suffix),
+    change: pct == null ? '--' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`,
+    up: pct == null || pct >= 0, source: 'jpx' };
+}
 
-  for (const fetcher of chain) {
+async function fetchJpx(sym) {
+  const res = await fetch('https://www.jpx.co.jp/market/indices/indices_stock_price3.txt', {
+    signal: AbortSignal.timeout(7000),
+  });
+  if (!res.ok) throw new Error(`JPX HTTP ${res.status}`);
+  return parseJpxTopix(await res.json(), sym);
+}
+
+// 失敗は部分成功時にもレスポンスに残す。キーを含むURL・例外本文は出力しない。
+export async function fetchSymbol(sym, apiKey) {
+  const chain = sym.jpx ? [['jpx', () => fetchJpx(sym)]] : sym.preferStooq
+    ? [['stooq', () => fetchStooq(sym)], ['yahoo', () => fetchYahoo(sym)]]
+    : [['yahoo', () => fetchYahoo(sym)], ['stooq', () => fetchStooq(sym)]];
+  if (sym.tdSymbol && apiKey) chain.push(['twelvedata', () => fetchTwelveData(sym.tdSymbol, sym, apiKey)]);
+  const errors = [];
+  for (const [source, fetcher] of chain) {
     try {
-      return await fetcher();
-    } catch {
-      // try next source
+      return { ...await fetcher(), ...(errors.length ? { errors } : {}) };
+    } catch (error) {
+      const reason = /^(JPX|Stooq|Yahoo|TD) (HTTP )?\d{3}$/.test(error.message)
+        || /^(JPX TOPIX missing\/invalid currentPrice|Stooq (empty|malformed|no close)|no price|no Yahoo symbol|no Stooq symbol)$/.test(error.message)
+        ? error.message : `${source} request failed (${error.name || 'Error'})`;
+      errors.push({ source, reason });
+      console.error('market source failure', { label: sym.label, source, reason });
     }
   }
-
-  // Last resort: Twelve Data, only if a symbol mapping exists and key is set.
-  if (sym.tdSymbol && apiKey) {
-    try {
-      return await fetchTwelveData(sym.tdSymbol, sym, apiKey);
-    } catch {
-      // fall through
-    }
-  }
-
-  return { label: sym.label, value: '--', change: '--', up: true, source: 'none' };
+  return { label: sym.label, value: '--', change: '--', up: true, source: 'none', errors };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
