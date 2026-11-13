@@ -1,5 +1,5 @@
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { getCategoryById } from '../utils/categories';
 import { useFavorites } from '../hooks/useFavorites';
 
@@ -22,7 +22,11 @@ function timeFormat(dateStr) {
 }
 
 export default function ArticleDetail() {
-  const { id } = useParams();
+  const { state } = useLocation();
+  return <ArticleDetailContent key={state?.article?.id ?? 'missing'} />;
+}
+
+function ArticleDetailContent() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const { toggleFavorite, isFavorite, setMemo, getMemo } = useFavorites();
@@ -41,11 +45,6 @@ export default function ArticleDetail() {
     setMemoSaved(true);
     setTimeout(() => setMemoSaved(false), 2000);
   };
-
-  // sync memo from storage when article loads
-  useEffect(() => {
-    if (article) setLocalMemo(getMemo(article.id));
-  }, [article?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!article) {
     return (

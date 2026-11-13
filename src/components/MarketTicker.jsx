@@ -33,6 +33,8 @@ export default function MarketTicker() {
   };
 
   useEffect(() => {
+    // 初回の外部API取得を開始し、以後はタイマーで購読する。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     timerRef.current = setInterval(fetchData, REFRESH_MS);
     return () => clearInterval(timerRef.current);

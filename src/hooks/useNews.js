@@ -50,6 +50,8 @@ export function useNews({ categoryId = null, limit = null } = {}) {
   }, [categoryId, limit, retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // 初回の外部API取得を開始し、以後はタイマーで購読する。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     timerRef.current = setInterval(load, REFRESH_INTERVAL);
     return () => clearInterval(timerRef.current);
